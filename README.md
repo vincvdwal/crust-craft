@@ -22,7 +22,6 @@ Happy baking! 🍕🛠️
 git clone https://github.com/vincvdwal/crust-craft/
 cd crust-craft
 ```
-The repo contains the following layout:
 
 ## Installing PlatformIO
 
@@ -42,7 +41,6 @@ VS Code	Double‑click `crust-craft` folder or open > File → Add Folder to W
 
 Edit platformio.ini (shown below – you can adjust as needed):
 
-
 ```ini
 [env:esp32dev]
 platform = espressif32
@@ -60,7 +58,7 @@ framework = arduino
 
 Click the “Build” icon (checkboard) in VS Code’s PlatformIO toolbar.
 The output will be displayed in the Build Log pane.
-Success → you’ll see: Build Done and an `firmware.bin` file under `.pio/build`.
+Success → you’ll see: "Build Done and an `firmware.bin` file under `.pio/build`."
 
 ## Uploading to the ESP via VS Code
 
@@ -91,38 +89,34 @@ const char *password = "WIFI_PWD";
 
 ## Installing the filesystem
 
+Use NPM to install all packages used for the website
 
-## Debugging the filesystem
-
-
-## Building and uploading the filesystem
-
-
-## Diagram
-
-```mermaid
-flowchart TD
-    subgraph MCU
-        ESP32[ESP32 3.3 VGND]
-    end
-    subgraph Sensors
-        MAX6675[MAX6675 3.3 VGNDCS, SCK, SO]
-        Thermo[K‑Type + / -]
-    end
-    subgraph Relay
-        RELAY[5V Relay IN VCC(5V) GND]
-    end
-
-    ESP32-->|3.3V|MAX6675
-    ESP32-->|GND|MAX6675
-    ESP32-->|SCK|MAX6675
-    ESP32-->|CS|MAX6675
-    ESP32-->|GPIO15|RELAY
-    ESP32-->|GND|RELAY
-
-    Thermo-->|+|MAX6675
-    Thermo-->|-|MAX6675
+```bash
+npm i
 ```
+
+## Developing the filesystem
+
+For developing the FS you can use the following command:
+
+```bash
+npm run dev
+```
+
+## Building and flashing the filesystem
+
+### Create the ESP‑FS image
+
+```bash
+npm run build
+```
+
+This command writes all of your web assets (HTML, JS, CSS) into a `data/` directory
+
+### Upload the image to the ESP32
+
+In the PlatformIO toolbar, hit "Build Filesystem Image" to pack the `data/` dir into a flashable filesystem image.
+Afterwards, click "Upload Filesystem Image" to send the image to the chip.
 
 
 ## Acknowlegdements
