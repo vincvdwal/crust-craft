@@ -103,14 +103,14 @@ const char *password = "WIFI_PWD";
 ```mermaid
 flowchart TD
     subgraph MCU
-        ESP32[<b>ESP32</b><br/>3.3 V<br/>GND]<br/>
+        ESP32[<b>ESP32</b>3.3 VGND]
     end
     subgraph Sensors
-        MAX6675[<b>MAX6675</b><br/>3.3 V<br/>GND<br/>CS, SCK, SO]
-        Thermo[<b>K‑Type</b><br/>+ / -]
+        MAX6675[<b>MAX6675</b>3.3 VGNDCS, SCK, SO]
+        Thermo[<b>K‑Type</b>+ / -]
     end
     subgraph Relay
-        RELAY[<b>5 V Relay</b><br/>IN<br/>VCC(5 V)<br/>GND]
+        RELAY[<b>5 V Relay</b>INVCC(5 V)GND]
     end
 
     ESP32-->|3.3 V|MAX6675
