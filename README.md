@@ -118,6 +118,12 @@ This command writes all of your web assets (HTML, JS, CSS) into a `data/` direct
 In the PlatformIO toolbar, hit "Build Filesystem Image" to pack the `data/` dir into a flashable filesystem image.
 Afterwards, click "Upload Filesystem Image" to send the image to the chip.
 
+## OTA Updates
+
+The firmware can also be updated over the air.
+Once the device is connected to your local network, navigate to its IP address (e.g., http://192.168.1.50/update).
+On that page you’ll find an upload form for the firmware binary, and another for the filesystem image.
+Simply select the new files and click Upload; the ESP32 will flash them via Wi‑Fi.
 
 ## Acknowlegdements
 
