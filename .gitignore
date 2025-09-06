@@ -1,0 +1,8 @@
+.pio
+.vscode
+
+node_modules
+
+src/secrets.h
+
+data

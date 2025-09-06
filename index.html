@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>CrustCraft</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/ico" href="favicon.ico">
+</head>
+
+<body>
+    <div class="nav">
+        <div class="nav-title">CrustCraft</div>
+    </div>
+    <div class="content">
+        <div class="card-grid">
+            <div class="card">
+                <p class="card-title">
+                    Temperature</p>
+                <p class="reading"><span id="temperature"></span> &deg;C</p>
+            </div>
+            <div class="card relais" id="relais_switch">
+                <p>Relais</p>
+                <div class="onoffswitch">
+                    <input type="checkbox" name="onoffswitch" class="onoffswitch-checkbox" id="relais_switch_input"
+                        tabindex="0">
+                    <label class="onoffswitch-label" for="relais_switch_input">
+                        <span class="onoffswitch-inner"></span>
+                        <span class="onoffswitch-switch"></span>
+                    </label>
+                </div>
+            </div>
+
+        </div>
+        <div class="oven" id="oven">
+            <div class="oven-wrapper">
+                <div class="oven-img-wrapper">
+                    <img src="/oven.png">
+                </div>
+            </div>
+        </div>
+        <div class="graph">
+            <div class="plot-wrapper">
+                <div id="plot"></div>
+
+            </div>
+        </div>
+        <div class="card-grid settings">
+            <div class="card">
+                <p class="card-title">
+                    Target temperature</p>
+                <p class="reading"><input type="number" min="0" max="600" placeholder="350" id="target_temperature">
+                    </input> <label for="target_temperature">
+                        &deg;C
+                </p>
+                </label>
+            </div>
+
+        </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+</body>
+
+</html>
