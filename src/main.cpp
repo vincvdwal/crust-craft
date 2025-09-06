@@ -88,6 +88,12 @@ void notifyClients(String sensorReadings)
   ws.textAll(sensorReadings);
 }
 
+void resetDerivedValues()
+{
+  derivedOverShoot = targetTemp;
+  derivedUnderShoot = targetTemp;
+}
+
 void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
 {
   AwsFrameInfo *info = (AwsFrameInfo *)arg;
@@ -191,12 +197,6 @@ void regulateRelais()
       }
     }
   }
-}
-
-void resetDerivedValues()
-{
-  derivedOverShoot = targetTemp;
-  derivedUnderShoot = targetTemp;
 }
 
 void setup()
