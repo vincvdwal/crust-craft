@@ -141,4 +141,5 @@ ESP32Async/ESPAsyncWebServer	| https://github.com/ESP32Async/ESPAsyncWebServer |
 
 ### Display
 
-In the long run a capacative LCD screen might be used in addition to the WebSocket connection
+- Add capacative LCD screen to be used in addition to the WebSocket connection for direct control on the oven
+- Maybe add sensor to indicate if the lid has been opened

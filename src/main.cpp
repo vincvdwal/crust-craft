@@ -31,10 +31,12 @@ int thermoCLK = 5;
 MAX6675 thermocouple(thermoCLK, thermoCS, thermoDO);
 
 int targetTemp = 300;
-int overShoot = 10;
-int underShoot = 5;
+float setOverShoot = 15;
+float setUnderShoot = 10;
+float derivedOverShoot = targetTemp;
+float derivedUnderShoot = targetTemp;
 unsigned long lastSwitch = 0;
-unsigned long switchDelay = 60000;
+unsigned long switchDelay = 30000; // 30s
 bool autoSwitch = true;
 
 // Get Sensor Readings and return JSON object
@@ -49,6 +51,9 @@ String getSensorReadings()
   {
     readings["relais"] = 0;
   }
+  readings["target_temp"] = targetTemp;
+  readings["derived_overshoot"] = derivedOverShoot;
+  readings["derived_undershoot"] = derivedUnderShoot;
   serializeJson(readings, jsonString);
   return jsonString;
 }
@@ -108,11 +113,12 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
         digitalWrite(relay, HIGH);
         lastSwitch = millis();
       }
+      resetDerivedValues();
     }
     if (message.startsWith("setTargetTemp"))
     {
       String target = message.substring(15, 18);
-      targetTemp = target.toInt();
+      targetTemp = target.toFloat();
       Serial.printf("\nTarget temp set to ");
       Serial.print(targetTemp);
       Serial.printf("°C");
@@ -145,6 +151,54 @@ void initWebSocket()
   server.addHandler(&ws);
 }
 
+void regulateRelais()
+{
+  if (autoSwitch)
+  {
+    if ((millis() - lastSwitch) > switchDelay)
+    {
+      float temperature = thermocouple.readCelsius();
+      float sinceLastSwitch = millis() - lastSwitch;
+      float fiveMinutesInMillis = 5 * 60 * 1000;
+      float shootFactor = sinceLastSwitch / fiveMinutesInMillis;
+
+      float overshoot = setOverShoot * shootFactor; // derive over 5 mins -> 1 min eq. 3°C, 5mins eq. 15°C
+      float dirivedOvershoot = min(overshoot, setOverShoot);
+
+      float undershoot = setUnderShoot * shootFactor; // derive over 5 min -> 1 min eq. 3°C, 5mins eq. 15°C
+      float dirivedUndershoot = min(undershoot, setUnderShoot);
+
+      float overShootCorrectedTarget = derivedOverShoot = targetTemp - dirivedOvershoot;
+      float underShootCorrectedTarget = derivedUnderShoot = targetTemp + dirivedUndershoot;
+
+      if (temperature > overShootCorrectedTarget) // > 285°C
+      {
+        if (digitalRead(relay) == HIGH)
+        {
+          digitalWrite(relay, LOW);
+          lastSwitch = millis();
+          resetDerivedValues();
+        }
+      }
+      else if (temperature < underShootCorrectedTarget) // < 310°C
+      {
+        if (digitalRead(relay) == LOW)
+        {
+          digitalWrite(relay, HIGH);
+          lastSwitch = millis();
+          resetDerivedValues();
+        }
+      }
+    }
+  }
+}
+
+void resetDerivedValues()
+{
+  derivedOverShoot = targetTemp;
+  derivedUnderShoot = targetTemp;
+}
+
 void setup()
 {
   Serial.begin(9600);
@@ -172,16 +226,7 @@ void loop()
   {
     String sensorReadings = getSensorReadings();
     notifyClients(sensorReadings);
-    if (((millis() - lastSwitch) > switchDelay) && thermocouple.readCelsius() >= (targetTemp - overShoot)) // >= 285°C
-    {
-      digitalWrite(relay, LOW);
-      lastSwitch = millis();
-    }
-    if (((millis() - lastSwitch) > switchDelay) && thermocouple.readCelsius() < (targetTemp - underShoot)) // < 270°C
-    {
-      digitalWrite(relay, HIGH);
-      lastSwitch = millis();
-    }
+    regulateRelais();
     lastTime = millis();
   }
 

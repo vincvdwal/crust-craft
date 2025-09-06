@@ -19,17 +19,17 @@ let ws: WebSocket;
 const now = new Date()
 
 let container: HTMLElement | null = document.querySelector('#plot')
-let temperatureData = [
-    [now.getTime(), 25]
-]
+
 
 let relais = 0
 let relaisData = [
     [now.getTime(), 0]
 ]
 
-let temp = 25;
-let targetTemp = 350
+let temp = 300;
+let targetTemp = 300
+let targetTempOverShoot = 300
+let targetTempUnderShoot = 300
 
 const oven = document.querySelector('#oven')
 const temperature = document.querySelector('#temperature')
@@ -41,6 +41,10 @@ let maxValues = 4 * 60 * 60 // 60 minutes (4 values/sec)
 
 let hs: Highcharts.StockChart;
 let hsOptions: Highcharts.Options
+
+let temperatureData = [
+    [now.getTime(), temp]
+]
 
 const getRelaisBands = () => {
     let relaisBands = []
@@ -65,15 +69,18 @@ const getRelaisBands = () => {
 }
 
 const dashStyle: DashStyleValue = 'Dash'
-const getTargetLine = () => {
+const getTargetLines = () => {
     return [
-        { value: targetTemp, width: 3, dashStyle: dashStyle }
+        { value: targetTemp, width: 3, dashStyle: dashStyle },
+        { value: targetTempOverShoot, width: 1, dashStyle: dashStyle, color: "red" },
+        { value: targetTempUnderShoot, width: 1, dashStyle: dashStyle, color: "red" }
     ]
 }
 
 const createChart = () => {
     hsOptions = {
         chart: {
+            height: '650px',
             animation: {
                 duration: 250,
                 easing: 'linear'
@@ -121,7 +128,7 @@ const createChart = () => {
                 to: 600,
                 color: 'rgba(255, 0, 0, 0.4)'
             }],
-            plotLines: getTargetLine()
+            plotLines: getTargetLines()
         },
 
         xAxis: {
@@ -233,7 +240,7 @@ const onLoad = () => {
 
 
                 hs.xAxis[0].update({ plotBands: getRelaisBands() })
-                hs.yAxis[0].update({ plotLines: getTargetLine() })
+                hs.yAxis[0].update({ plotLines: getTargetLines() })
                 hs.series[0].setData(temperatureData, true)
             }, 250)
         }
@@ -302,10 +309,16 @@ const onMessage = (event: MessageEvent) => {
                 if (relaisSwitchInput)
                     relaisSwitchInput.checked = false
             }
+        } else if (key === 'target_temp') {
+            targetTemp = myObj[key]
+        } else if (key === 'derived_overshoot') {
+            targetTempOverShoot = myObj[key]
+        } else if (key === 'derived_undershoot') {
+            targetTempUnderShoot = myObj[key]
         }
 
         hs.xAxis[0].update({ plotBands: getRelaisBands() })
-        hs.yAxis[0].update({ plotLines: getTargetLine() })
+        hs.yAxis[0].update({ plotLines: getTargetLines() })
         hs.series[0].setData(temperatureData, true)
     }
 }
@@ -336,10 +349,10 @@ const switchRelais = () => {
 const changeTargetTemp = (e: Event) => {
     const target = e.target as HTMLTextAreaElement;
     let value = Number(target?.value)
-    targetTemp = value
-    console.log('Changed target temp to ' + targetTemp)
+    // targetTemp = value
+    console.log('Changed target temp to ' + value)
     if (!import.meta.env.DEV) {
-        ws.send("setTargetTemp: " + pad(targetTemp, 3));
+        ws.send("setTargetTemp: " + pad(value, 3));
     }
 }
 
