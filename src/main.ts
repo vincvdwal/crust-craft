@@ -28,14 +28,22 @@ let relaisData = [
 
 let temp = 300;
 let targetTemp = 300
+let setOverShoot = 30
+let setUnderShoot = 30
 let targetTempOverShoot = 300
 let targetTempUnderShoot = 300
 
+let lastSwitch = new Date()
+let lastSwitchDuration = 0
 const oven = document.querySelector('#oven')
 const temperature = document.querySelector('#temperature')
 const relaisSwitch = document.querySelector('#relais_switch')
 const relaisSwitchInput: HTMLInputElement | null = document.querySelector('#relais_switch_input')
 const targetTempInput: HTMLInputElement | null = document.querySelector('#target_temperature')
+
+let spoofInterval = 10
+let speedFactor = 250 / spoofInterval
+const switchDelay = 60 / speedFactor * 1000
 
 let maxValues = 4 * 60 * 60 // 60 minutes (4 values/sec)
 
@@ -91,10 +99,10 @@ const createChart = () => {
             enabled: false
         },
 
-        title: {
-            text: 'Temperature',
-            align: 'left',
-        },
+        // title: {
+        //     text: 'Temperature',
+        //     align: 'left',
+        // },
 
         rangeSelector: {
             enabled: false,
@@ -218,34 +226,93 @@ const onLoad = () => {
                 }
                 let d = new Date()
 
-                if (temp < 150) {
-                    temp = temp + Math.random() * 4 - 1
-                } else if (temp < 20) {
-                    temp = temp + Math.random() * 4 - 1.3
-                } else if (temp < targetTemp) {
-                    temp = temp + Math.random() * 4 - 1.5
-                } else if (temp >= targetTemp) {
-                    temp = temp + Math.random() * 3 - 1.6
-                }
-                if (relais) {
-                    temp = temp + 0.2
+                if (temp < (targetTemp / 2)) {
+                    temp = temp + Math.random() * 0.5 - 0.125
+                } else if (temp < (targetTemp / (3 / 2))) {
+                    temp = temp + Math.random() * 0.5 - 0.15
                 } else {
-                    temp = temp - 0.1
+                    temp = temp + Math.random() * 0.5 - 0.25
+                }
+
+                let shootFactor = Math.min(((((d.getTime() - lastSwitch.getTime()) / speedFactor) - ((lastSwitchDuration * 0.5) / speedFactor))) / ((3 * 60 * 1000) / speedFactor), 1) // 5mins
+                shootFactor = shootFactor
+
+                if (relais == 0) {
+                    temp = temp - 0.8 * shootFactor
+                } else {
+                    temp = temp + 1 * shootFactor
+                }
+
+                let mod = temp % 0.25
+                if (mod > 0.125) {
+                    temp = temp - mod + 0.25
+                } else {
+                    temp = temp - mod
                 }
 
                 if (temperature)
                     temperature.innerHTML = temp.toFixed(2);
-                temperatureData.push([d.getTime(), temp])
-                relaisData.push([d.getTime(), relais])
 
+                temperatureData.push([d.getTime(), temp])
+
+                let derivedShootFactor = Math.min(((d.getTime() - lastSwitch.getTime()) / speedFactor) / ((3 * 60 * 1000) / speedFactor), 1) // 5mins
+
+                let overshoot = setOverShoot * derivedShootFactor; // derive over 5 mins -> 1 min eq. 3°C, 5mins eq. 15°C
+                let dirivedOvershoot = Math.min(overshoot, setOverShoot);
+
+                let undershoot = setUnderShoot * derivedShootFactor; // derive over 5 min -> 1 min eq. 3°C, 5mins eq. 15°C
+                let dirivedUndershoot = Math.min(undershoot, setUnderShoot);
+
+                targetTempOverShoot = targetTemp - dirivedOvershoot;
+                targetTempUnderShoot = targetTemp + dirivedUndershoot;
+
+                if ((d.getTime() - lastSwitch.getTime()) > switchDelay) {
+                    if (temp > targetTempOverShoot) // > 270 °C
+                    {
+                        if (relais == 1) {
+                            relais = 0;
+                            oven?.classList.remove('on')
+                            relaisSwitch?.classList.remove('on')
+                            if (relaisSwitchInput)
+                                relaisSwitchInput.checked = false
+
+                            targetTempOverShoot = targetTemp
+                            targetTempUnderShoot = targetTemp
+                            lastSwitchDuration = d.getTime() - lastSwitch.getTime()
+                            lastSwitch = new Date()
+                        }
+                    }
+                }
+                if ((d.getTime() - lastSwitch.getTime()) > switchDelay) {
+                    if (temp < targetTempUnderShoot) // < 310°C
+                    {
+                        if (relais == 0) {
+                            relais = 1;
+                            oven?.classList.add('on')
+                            relaisSwitch?.classList.add('on')
+                            if (relaisSwitchInput)
+                                relaisSwitchInput.checked = true
+
+                            targetTempOverShoot = targetTemp
+                            targetTempUnderShoot = targetTemp
+                            lastSwitchDuration = d.getTime() - lastSwitch.getTime()
+                            lastSwitch = new Date()
+                        }
+                    }
+                }
+
+
+                relaisData.push([d.getTime(), relais])
 
                 hs.xAxis[0].update({ plotBands: getRelaisBands() })
                 hs.yAxis[0].update({ plotLines: getTargetLines() })
                 hs.series[0].setData(temperatureData, true)
-            }, 250)
+            }, spoofInterval)
         }
     }
 }
+
+
 
 
 window.addEventListener('load', onLoad);
@@ -329,6 +396,9 @@ const switchRelais = () => {
         ws.send("switchRelais");
     } else {
         // spoof some test data
+        let d = new Date()
+        lastSwitchDuration = d.getTime() - lastSwitch.getTime()
+        lastSwitch = new Date()
         if (!relais) {
             relais = 1
             oven?.classList.add('on')
@@ -338,7 +408,6 @@ const switchRelais = () => {
         } else {
             relais = 0
             oven?.classList.remove('on')
-
             relaisSwitch?.classList.remove('on')
             if (relaisSwitchInput)
                 relaisSwitchInput.checked = false
@@ -349,10 +418,13 @@ const switchRelais = () => {
 const changeTargetTemp = (e: Event) => {
     const target = e.target as HTMLTextAreaElement;
     let value = Number(target?.value)
-    // targetTemp = value
     console.log('Changed target temp to ' + value)
     if (!import.meta.env.DEV) {
         ws.send("setTargetTemp: " + pad(value, 3));
+    } else {
+        targetTemp = value
+        targetTempOverShoot = value
+        targetTempUnderShoot = value
     }
 }
 

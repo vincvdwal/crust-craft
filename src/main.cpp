@@ -9,10 +9,7 @@
 
 #include "secrets.h"
 
-// Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
-
-// Create a WebSocket object
 AsyncWebSocket ws("/ws");
 
 // Json Variable to Hold Sensor Readings
@@ -30,19 +27,23 @@ int thermoCLK = 5;
 
 MAX6675 thermocouple(thermoCLK, thermoCS, thermoDO);
 
+float temperature = 0;
 int targetTemp = 300;
-float setOverShoot = 15;
-float setUnderShoot = 10;
+float setOverShoot = 20;
+float setUnderShoot = 20;
 float derivedOverShoot = targetTemp;
 float derivedUnderShoot = targetTemp;
 unsigned long lastSwitch = 0;
-unsigned long switchDelay = 30000; // 30s
+unsigned long switchDelay = 30000; // 15s
 bool autoSwitch = true;
 
 // Get Sensor Readings and return JSON object
 String getSensorReadings()
 {
-  readings["temperature"] = thermocouple.readCelsius();
+  temperature = thermocouple.readCelsius();
+
+  readings["temperature"] = temperature;
+
   if (digitalRead(relay) == HIGH)
   {
     readings["relais"] = 1;
@@ -51,6 +52,7 @@ String getSensorReadings()
   {
     readings["relais"] = 0;
   }
+
   readings["target_temp"] = targetTemp;
   readings["derived_overshoot"] = derivedOverShoot;
   readings["derived_undershoot"] = derivedUnderShoot;
@@ -161,23 +163,23 @@ void regulateRelais()
 {
   if (autoSwitch)
   {
+    float sinceLastSwitch = millis() - lastSwitch;
+    float fiveMinutesInMillis = 5 * 60 * 1000;
+    float shootFactor = sinceLastSwitch / fiveMinutesInMillis;
+
+    float overshoot = setOverShoot * shootFactor; // derive over 5 mins -> 1 min eq. 3°C, 5mins eq. 15°C
+    float dirivedOvershoot = min(overshoot, setOverShoot);
+
+    float undershoot = setUnderShoot * shootFactor; // derive over 5 min -> 1 min eq. 3°C, 5mins eq. 15°C
+    float dirivedUndershoot = min(undershoot, setUnderShoot);
+
+    float overShootCorrectedTarget = derivedOverShoot = targetTemp - dirivedOvershoot;
+    float underShootCorrectedTarget = derivedUnderShoot = targetTemp + dirivedUndershoot;
+
     if ((millis() - lastSwitch) > switchDelay)
     {
-      float temperature = thermocouple.readCelsius();
-      float sinceLastSwitch = millis() - lastSwitch;
-      float fiveMinutesInMillis = 5 * 60 * 1000;
-      float shootFactor = sinceLastSwitch / fiveMinutesInMillis;
 
-      float overshoot = setOverShoot * shootFactor; // derive over 5 mins -> 1 min eq. 3°C, 5mins eq. 15°C
-      float dirivedOvershoot = min(overshoot, setOverShoot);
-
-      float undershoot = setUnderShoot * shootFactor; // derive over 5 min -> 1 min eq. 3°C, 5mins eq. 15°C
-      float dirivedUndershoot = min(undershoot, setUnderShoot);
-
-      float overShootCorrectedTarget = derivedOverShoot = targetTemp - dirivedOvershoot;
-      float underShootCorrectedTarget = derivedUnderShoot = targetTemp + dirivedUndershoot;
-
-      if (temperature > overShootCorrectedTarget) // > 285°C
+      if (temperature > overShootCorrectedTarget) // > 280°C
       {
         if (digitalRead(relay) == HIGH)
         {
@@ -186,7 +188,10 @@ void regulateRelais()
           resetDerivedValues();
         }
       }
-      else if (temperature < underShootCorrectedTarget) // < 310°C
+    }
+    if ((millis() - lastSwitch) > switchDelay)
+    {
+      if (temperature < underShootCorrectedTarget) // < 320°C
       {
         if (digitalRead(relay) == LOW)
         {
