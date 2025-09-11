@@ -34,8 +34,10 @@ float setUnderShoot = 20;
 float derivedOverShoot = targetTemp;
 float derivedUnderShoot = targetTemp;
 unsigned long lastSwitch = 0;
-unsigned long switchDelay = 30000; // 15s
-bool autoSwitch = true;
+unsigned long autoSwitchDelay = 20000; // 20s
+unsigned long pwmSwitchDelay = 5000;   // 5s
+
+String mode = "off";
 
 // Get Sensor Readings and return JSON object
 String getSensorReadings()
@@ -56,6 +58,8 @@ String getSensorReadings()
   readings["target_temp"] = targetTemp;
   readings["derived_overshoot"] = derivedOverShoot;
   readings["derived_undershoot"] = derivedUnderShoot;
+  readings["mode"] = mode;
+
   serializeJson(readings, jsonString);
   return jsonString;
 }
@@ -131,6 +135,25 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
       Serial.print(targetTemp);
       Serial.printf("°C");
     }
+    if (message.startsWith("setMode"))
+    {
+      if (message.indexOf("auto_switch") > 0)
+      {
+        mode = "auto_switch";
+      }
+      else if (message.indexOf("pwm") > 0)
+      {
+        mode = "pwm";
+      }
+      else
+      {
+        mode = "off";
+        digitalWrite(relay, LOW);
+        lastSwitch = millis();
+      }
+      Serial.printf("\nMode set to ");
+      Serial.print(mode);
+    }
   }
 }
 
@@ -161,7 +184,7 @@ void initWebSocket()
 
 void regulateRelais()
 {
-  if (autoSwitch)
+  if (mode == "auto_switch")
   {
     float sinceLastSwitch = millis() - lastSwitch;
     float fiveMinutesInMillis = 5 * 60 * 1000;
@@ -176,7 +199,7 @@ void regulateRelais()
     float overShootCorrectedTarget = derivedOverShoot = targetTemp - dirivedOvershoot;
     float underShootCorrectedTarget = derivedUnderShoot = targetTemp + dirivedUndershoot;
 
-    if ((millis() - lastSwitch) > switchDelay)
+    if ((millis() - lastSwitch) > autoSwitchDelay)
     {
 
       if (temperature > overShootCorrectedTarget) // > 280°C
@@ -189,7 +212,7 @@ void regulateRelais()
         }
       }
     }
-    if ((millis() - lastSwitch) > switchDelay)
+    if ((millis() - lastSwitch) > autoSwitchDelay)
     {
       if (temperature < underShootCorrectedTarget) // < 320°C
       {
@@ -199,6 +222,23 @@ void regulateRelais()
           lastSwitch = millis();
           resetDerivedValues();
         }
+      }
+    }
+  }
+
+  if (mode == "pwm")
+  {
+    if ((millis() - lastSwitch) > pwmSwitchDelay)
+    {
+      if (digitalRead(relay) == HIGH)
+      {
+        digitalWrite(relay, LOW);
+        lastSwitch = millis();
+      }
+      else if (digitalRead(relay) == LOW)
+      {
+        digitalWrite(relay, HIGH);
+        lastSwitch = millis();
       }
     }
   }

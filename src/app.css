@@ -1,3 +1,8 @@
+@import 'tailwindcss';
+@plugin '@tailwindcss/forms';
+@plugin '@tailwindcss/typography';
+
+
 html,
 body {
     font-family:
@@ -36,7 +41,7 @@ p {
 }
 
 .graph {
-    height: 570px;
+    height: 400px;
     overflow: hidden;
     display: flex;
     justify-content: center;
@@ -158,22 +163,25 @@ p {
 
 .onoffswitch-inner:before {
     content: "ON";
-    padding-left: 10px;
     background-color: #C43535;
     color: #FFFFFF;
+    padding-right: 8px;
+    text-align: center;
 }
 
 .onoffswitch-inner:after {
     content: "OFF";
-    padding-right: 10px;
+    padding-left: 10px;
+
     background-color: #EEEEEE;
     color: #999999;
-    text-align: right;
+    text-align: center;
 }
 
 .onoffswitch-switch {
     display: block;
-    width: 18px;
+    width: 22px;
+    height: 22px;
     margin: 6px;
     background: #FFFFFF;
     position: absolute;
@@ -194,6 +202,7 @@ p {
 }
 
 .settings {
+    margin-bottom: 200px;
     margin-top: 50px;
 }
 
@@ -201,4 +210,21 @@ p {
     max-width: 50px;
     font-size: larger;
     font-weight: bold;
+}
+
+.hidden {
+    display: none;
+}
+
+#mode_span::first-letter {
+    text-transform: capitalize;
+}
+
+.chart div {
+    font: 10px sans-serif;
+    background-color: steelblue;
+    text-align: right;
+    padding: 3px;
+    margin: 1px;
+    color: white;
 }

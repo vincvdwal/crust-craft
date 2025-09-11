@@ -1,16 +1,8 @@
-import Highcharts, { type DashStyleValue } from 'highcharts/highstock'
 
-import 'highcharts/modules/accessibility'
+import * as d3 from "d3";
+
 
 import './styles.css'
-
-export const pad = (n: string | number, amount = 2) => {
-    if (amount == 2) {
-        return ('0' + n).slice(-2);
-    } else {
-        return ('00' + n).slice(-3);
-    }
-};
 
 
 let gateway = `ws://${window.location.hostname}/ws`;
@@ -20,38 +12,40 @@ const now = new Date()
 
 let container: HTMLElement | null = document.querySelector('#plot')
 
-
-let relais = 0
-let relaisData = [
-    [now.getTime(), 0]
-]
-
+let mode = 'off'
 let temp = 300;
+let relais = 0
 let targetTemp = 300
-let setOverShoot = 30
-let setUnderShoot = 30
-let targetTempOverShoot = 300
-let targetTempUnderShoot = 300
+let setOverShoot = 20
+let setUnderShoot = 20
+let targetTempOverShoot = targetTemp
+let targetTempUnderShoot = targetTemp
 
 let lastSwitch = new Date()
 let lastSwitchDuration = 0
+
 const oven = document.querySelector('#oven')
 const temperature = document.querySelector('#temperature')
 const relaisSwitch = document.querySelector('#relais_switch')
 const relaisSwitchInput: HTMLInputElement | null = document.querySelector('#relais_switch_input')
 const targetTempInput: HTMLInputElement | null = document.querySelector('#target_temperature')
+const modeSpan: HTMLInputElement | null = document.querySelector('#mode_span')
+const modeSelector: HTMLInputElement | null = document.querySelector('#mode_selector')
+const prepareDownload: HTMLElement | null = document.querySelector('#prepare_download')
+const downloadCSVButton: HTMLElement | null = document.querySelector('#download_csv')
 
-let spoofInterval = 10
+let spoofInterval = 250
 let speedFactor = 250 / spoofInterval
-const switchDelay = 60 / speedFactor * 1000
+const switchDelay = (100 / speedFactor) * 1000
 
 let maxValues = 4 * 60 * 60 // 60 minutes (4 values/sec)
 
-let hs: Highcharts.StockChart;
-let hsOptions: Highcharts.Options
 
 let temperatureData = [
     [now.getTime(), temp]
+]
+let relaisData = [
+    [now.getTime(), 0]
 ]
 
 const getRelaisBands = () => {
@@ -76,134 +70,61 @@ const getRelaisBands = () => {
     return relaisBands
 }
 
-const dashStyle: DashStyleValue = 'Dash'
-const getTargetLines = () => {
-    return [
-        { value: targetTemp, width: 3, dashStyle: dashStyle },
-        { value: targetTempOverShoot, width: 1, dashStyle: dashStyle, color: "red" },
-        { value: targetTempUnderShoot, width: 1, dashStyle: dashStyle, color: "red" }
-    ]
-}
+
+// set the dimensions and margins of the graph
+const margin = { top: 10, right: 30, bottom: 30, left: 60 };
+const width = 900 - margin.left - margin.right;
+const height = 500 - margin.top - margin.bottom;
+let svg: d3.Selection<SVGGElement, unknown, null, undefined>;
 
 const createChart = () => {
-    hsOptions = {
-        chart: {
-            height: '650px',
-            animation: {
-                duration: 250,
-                easing: 'linear'
-            },
-        },
 
-        credits: {
-            enabled: false
-        },
+    // append the svg object to the body of the page
+    svg = d3.select(container)
+        .append("svg")
+        .attr("width", width + margin.left + margin.right)
+        .attr("height", height + margin.top + margin.bottom)
+        .append("g")
+        .attr("transform",
+            "translate(" + margin.left + "," + margin.top + ")");
 
-        // title: {
-        //     text: 'Temperature',
-        //     align: 'left',
-        // },
+    // Declare the x (horizontal position) scale.
+    const x = d3.scaleUtc(d3.extent(aapl, d => d.date), [margin.left, width - margin.right]);
 
-        rangeSelector: {
-            enabled: false,
-            inputDateFormat: '%H:%M:%S'
-        },
+    // Declare the y (vertical position) scale.
+    const y = d3.scaleLinear([0, d3.max(aapl, d => d.close)], [height - margin.bottom, margin.top]);
 
-        yAxis: {
-            title: {
-                text: '&deg;C'
-            },
-            opposite: false,
-            min: 0,
-            max: 600,
-            tickInterval: 100,
-            plotBands: [{
-                from: 0,
-                to: 250,
-                color: 'rgba(69, 171, 255, 0.34)'
-            }, {
-                from: 250,
-                to: 420,
-                color: 'rgba(0, 255, 60, 0.34)'
-            },
-            {
-                from: 420,
-                to: 530,
-                color: 'rgba(255, 162, 0, 0.4)'
-            },
-            {
-                from: 530,
-                to: 600,
-                color: 'rgba(255, 0, 0, 0.4)'
-            }],
-            plotLines: getTargetLines()
-        },
+    // Declare the line generator.
+    const line = d3.line()
+        .x(d => x(d.date))
+        .y(d => y(d.close));
 
-        xAxis: {
-            type: 'datetime',
-            tickInterval: 30 * 1000, // 30 seconds
-            labels: {
-                rotation: -45,
-                formatter: (f) => {
-                    let d = new Date(f.pos)
-                    return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds())
-                },
-                style: {
-                    fontSize: '0.55em'
-                }
-            },
-            plotBands: getRelaisBands(),
+    // Add the x-axis.
+    svg.append("g")
+        .attr("transform", `translate(0,${height - margin.bottom})`)
+        .call(d3.axisBottom(x).ticks(width / 80).tickSizeOuter(0));
 
-        },
+    // Add the y-axis, remove the domain line, add grid lines and a label.
+    svg.append("g")
+        .attr("transform", `translate(${margin.left},0)`)
+        .call(d3.axisLeft(y).ticks(height / 40))
+        .call(g => g.select(".domain").remove())
+        .call(g => g.selectAll(".tick line").clone()
+            .attr("x2", width - margin.left - margin.right)
+            .attr("stroke-opacity", 0.1))
+        .call(g => g.append("text")
+            .attr("x", -margin.left)
+            .attr("y", 10)
+            .attr("fill", "currentColor")
+            .attr("text-anchor", "start")
+            .text("↑ Daily close ($)"));
 
-        legend: {
-            enabled: false,
-        },
-
-        tooltip: {
-            formatter: function () {
-                let d = new Date(this.x)
-                return [pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds()), `<b>${this.y?.toFixed(1)}&deg;C</b>`]
-            }
-        },
-
-        plotOptions: {
-            series: {
-                animation: false,
-                tooltip: {
-                    valueDecimals: 2,
-                },
-            }
-        },
-        data: {
-            enablePolling: true,
-            dataRefreshRate: 0.5
-        },
-
-        series: [{
-            type: 'areaspline',
-            name: 'Temperature',
-            data: temperatureData
-        }],
-
-        responsive: {
-            rules: [{
-                condition: {
-                    maxWidth: 1000
-                },
-                chartOptions: {
-                    legend: {
-                        layout: 'horizontal',
-                        align: 'center',
-                        verticalAlign: 'bottom'
-                    }
-                }
-            }]
-        }
-    }
-
-    if (container && hsOptions)
-        hs = Highcharts.stockChart(container, hsOptions)
+    // Append a path for the line.
+    svg.append("path")
+        .attr("fill", "none")
+        .attr("stroke", "steelblue")
+        .attr("stroke-width", 1.5)
+        .attr("d", line(aapl));
 }
 
 const onLoad = () => {
@@ -214,7 +135,9 @@ const onLoad = () => {
         createChart()
 
         relaisSwitch?.addEventListener('click', switchRelais)
+        modeSelector?.addEventListener('change', changeMode)
         targetTempInput?.addEventListener('change', changeTargetTemp)
+        prepareDownload?.addEventListener('click', downloadCSV)
 
 
         if (import.meta.env.DEV) {
@@ -234,13 +157,13 @@ const onLoad = () => {
                     temp = temp + Math.random() * 0.5 - 0.25
                 }
 
-                let shootFactor = Math.min(((((d.getTime() - lastSwitch.getTime()) / speedFactor) - ((lastSwitchDuration * 0.5) / speedFactor))) / ((3 * 60 * 1000) / speedFactor), 1) // 5mins
+                let shootFactor = Math.min(((((d.getTime() - lastSwitch.getTime()) / speedFactor) - ((lastSwitchDuration * 0.5) / speedFactor))) / ((5 * 60 * 1000) / speedFactor), 1) // 5mins
                 shootFactor = shootFactor
 
                 if (relais == 0) {
-                    temp = temp - 0.8 * shootFactor
+                    temp = temp - 0.3 * shootFactor
                 } else {
-                    temp = temp + 1 * shootFactor
+                    temp = temp + 0.3 * shootFactor
                 }
 
                 let mod = temp % 0.25
@@ -253,7 +176,6 @@ const onLoad = () => {
                 if (temperature)
                     temperature.innerHTML = temp.toFixed(2);
 
-                temperatureData.push([d.getTime(), temp])
 
                 let derivedShootFactor = Math.min(((d.getTime() - lastSwitch.getTime()) / speedFactor) / ((3 * 60 * 1000) / speedFactor), 1) // 5mins
 
@@ -266,47 +188,47 @@ const onLoad = () => {
                 targetTempOverShoot = targetTemp - dirivedOvershoot;
                 targetTempUnderShoot = targetTemp + dirivedUndershoot;
 
-                if ((d.getTime() - lastSwitch.getTime()) > switchDelay) {
-                    if (temp > targetTempOverShoot) // > 270 °C
-                    {
-                        if (relais == 1) {
-                            relais = 0;
-                            oven?.classList.remove('on')
-                            relaisSwitch?.classList.remove('on')
-                            if (relaisSwitchInput)
-                                relaisSwitchInput.checked = false
+                if (mode === 'auto_switch') {
+                    if ((d.getTime() - lastSwitch.getTime()) > switchDelay) {
+                        if (temp > targetTempOverShoot) // > 270 °C
+                        {
+                            if (relais == 1) {
+                                relais = 0;
+                                oven?.classList.remove('on')
+                                relaisSwitch?.classList.remove('on')
+                                if (relaisSwitchInput)
+                                    relaisSwitchInput.checked = false
 
-                            targetTempOverShoot = targetTemp
-                            targetTempUnderShoot = targetTemp
-                            lastSwitchDuration = d.getTime() - lastSwitch.getTime()
-                            lastSwitch = new Date()
+                                targetTempOverShoot = targetTemp
+                                targetTempUnderShoot = targetTemp
+                                lastSwitchDuration = d.getTime() - lastSwitch.getTime()
+                                lastSwitch = new Date()
+                            }
+                        }
+                    }
+                    if ((d.getTime() - lastSwitch.getTime()) > switchDelay) {
+                        if (temp < targetTempUnderShoot) // < 310°C
+                        {
+                            if (relais == 0) {
+                                relais = 1;
+                                oven?.classList.add('on')
+                                relaisSwitch?.classList.add('on')
+                                if (relaisSwitchInput)
+                                    relaisSwitchInput.checked = true
+
+                                targetTempOverShoot = targetTemp
+                                targetTempUnderShoot = targetTemp
+                                lastSwitchDuration = d.getTime() - lastSwitch.getTime()
+                                lastSwitch = new Date()
+                            }
                         }
                     }
                 }
-                if ((d.getTime() - lastSwitch.getTime()) > switchDelay) {
-                    if (temp < targetTempUnderShoot) // < 310°C
-                    {
-                        if (relais == 0) {
-                            relais = 1;
-                            oven?.classList.add('on')
-                            relaisSwitch?.classList.add('on')
-                            if (relaisSwitchInput)
-                                relaisSwitchInput.checked = true
 
-                            targetTempOverShoot = targetTemp
-                            targetTempUnderShoot = targetTemp
-                            lastSwitchDuration = d.getTime() - lastSwitch.getTime()
-                            lastSwitch = new Date()
-                        }
-                    }
-                }
-
-
+                temperatureData.push([d.getTime(), temp])
                 relaisData.push([d.getTime(), relais])
 
-                hs.xAxis[0].update({ plotBands: getRelaisBands() })
-                hs.yAxis[0].update({ plotLines: getTargetLines() })
-                hs.series[0].setData(temperatureData, true)
+                //update chart
             }, spoofInterval)
         }
     }
@@ -382,11 +304,14 @@ const onMessage = (event: MessageEvent) => {
             targetTempOverShoot = myObj[key]
         } else if (key === 'derived_undershoot') {
             targetTempUnderShoot = myObj[key]
+        } else if (key === 'mode') {
+            mode = myObj[key]
+            if (modeSpan) {
+                modeSpan.innerText = mode;
+            }
         }
 
-        hs.xAxis[0].update({ plotBands: getRelaisBands() })
-        hs.yAxis[0].update({ plotLines: getTargetLines() })
-        hs.series[0].setData(temperatureData, true)
+
     }
 }
 
@@ -428,3 +353,35 @@ const changeTargetTemp = (e: Event) => {
     }
 }
 
+const changeMode = (e: Event) => {
+    const target = e.target as HTMLTextAreaElement;
+    let value = target?.value
+    console.log('Mode set to ' + value)
+    if (!import.meta.env.DEV) {
+        ws.send("setMode: " + value);
+    } else {
+        mode = value
+        if (modeSpan) {
+            modeSpan.innerText = mode + " ";
+        }
+    }
+}
+
+const downloadCSV = () => {
+    let csvContent = 'Time,Temp,Relais\n'
+
+    console.log(temperatureData.length, relaisData.length)
+
+    for (let [i, temp] of temperatureData.entries()) {
+
+        csvContent += `${temp[0]},${temp[1]},${relaisData[i] ? relaisData[i][1] : ''}\n`
+    }
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8,' })
+    const objUrl = URL.createObjectURL(blob)
+    if (downloadCSVButton) {
+        downloadCSVButton.classList.remove('hidden')
+        downloadCSVButton.setAttribute('href', objUrl)
+        downloadCSVButton.setAttribute('download', 'data.csv')
+    }
+}
