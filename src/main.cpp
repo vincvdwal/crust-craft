@@ -35,8 +35,8 @@ float derivedOverShoot = targetTemp;
 float derivedUnderShoot = targetTemp;
 unsigned long lastSwitch = 0;
 unsigned long autoSwitchDelay = 20000; // 20s
-float pwmSwitchDelayOn = 4000;         // 5s
-float pwmSwitchDelayOff = 7000;        // 5s
+float pwmSwitchDelayOn = 4000;         // 4s
+float pwmSwitchDelayOff = 7000;        // 7s
 
 String mode = "off";
 
@@ -159,7 +159,7 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
     if (message.startsWith("setPWMOn"))
     {
       String target = message.substring(10, 15);
-      pwmSwitchDelayOn = target.toFloat();
+      pwmSwitchDelayOn = target.toFloat() * 1000;
       Serial.printf("\nPWM switch ON set to ");
       Serial.print(pwmSwitchDelayOn);
       Serial.printf("°C");
@@ -168,7 +168,7 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
     if (message.startsWith("setPWMOff"))
     {
       String target = message.substring(11, 16);
-      pwmSwitchDelayOff = target.toFloat();
+      pwmSwitchDelayOff = target.toFloat() * 1000;
       Serial.printf("\nPWM switch OFF set to ");
       Serial.print(pwmSwitchDelayOff);
       Serial.printf("°C");
