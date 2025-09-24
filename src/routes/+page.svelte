@@ -8,8 +8,6 @@
 
 	import { nl } from 'date-fns/locale';
 
-	import { browser } from '$app/environment';
-
 	import { pad } from '$lib/utils';
 	import { page } from '$app/state';
 
@@ -36,12 +34,13 @@
 	let spoofInterval = 250;
 	let speedFactor = 250 / spoofInterval;
 	const switchDelay = (30 / speedFactor) * 1000;
-	const pwmDelay = (5 / speedFactor) * 1000;
+	let pwmOnDelay = (4 / speedFactor) * 1000;
+	let pwmOffDelay = (7 / speedFactor) * 1000;
 
-	let maxValues = 4 * 60 * 60; // 60 minutes (4 values/sec)
+	let maxValues = 4 * 2 * 60 * 60; // 120 minutes (4 values/sec)
 
-	let temperatureData = [];
-	let relaisData = [];
+	let temperatureData: Array<[number, number]> = [];
+	let relaisData: Array<[number, number]> = [];
 
 	let downloadCSVButton: HTMLElement;
 	let modeSpan: HTMLElement;
@@ -64,14 +63,6 @@
 
 					xMax: relaisData[relaisData.length - 1][0] + 10,
 					xMin: r[0]
-					// label: {
-					// 	display: true,
-					// 	content: 'Heat',
-					// 	position: {
-					// 		x: 'center',
-					// 		y: 'start'
-					// 	}
-					// }
 				};
 			}
 			if (r[1] === 0 && active) {
@@ -92,15 +83,15 @@
 					backgroundColor: 'rgba(0, 255, 133, 0.25)',
 					borderWidth: 0,
 					yMax: 0,
-					yMin: 400
+					yMin: 350
 				},
 				limitOrange: {
 					type: 'box',
 					drawTime: 'beforeDraw',
 					backgroundColor: 'rgba(255, 138, 0 ,0.25)',
 					borderWidth: 0,
-					yMax: 400,
-					yMin: 500
+					yMax: 350,
+					yMin: 450
 				},
 				limitRed: {
 					type: 'box',
@@ -108,8 +99,8 @@
 
 					backgroundColor: 'rgba(255, 0, 0, 0.25)',
 					borderWidth: 0,
-					yMax: 500,
-					yMin: 600
+					yMax: 450,
+					yMin: 550
 				},
 				targetTemp: {
 					type: 'line',
@@ -174,7 +165,6 @@
 						}
 					},
 					y: {
-						title: 'Temperature C',
 						min: 0
 					}
 				}
@@ -274,11 +264,14 @@
 				}
 
 				if (mode === 'pwm') {
-					if (d.getTime() - lastSwitch.getTime() > pwmDelay) {
+					if (d.getTime() - lastSwitch.getTime() > pwmOnDelay) {
 						if (relais) {
 							relais = 0;
 							lastSwitch = new Date();
-						} else if (!relais) {
+						}
+					}
+					if (d.getTime() - lastSwitch.getTime() > pwmOffDelay) {
+						if (!relais) {
 							relais = 1;
 							lastSwitch = new Date();
 						}
@@ -405,6 +398,28 @@
 		}
 	};
 
+	const changePwmOn = (e: Event) => {
+		const target = e.target as HTMLTextAreaElement;
+		let value = Number(target?.value);
+		console.log('Changed pwm on to ' + value);
+		if (!import.meta.env.DEV) {
+			ws.send('setPWMOn: ' + pad(value, 3));
+		} else {
+			pwmOnDelay = (value / speedFactor) * 1000;
+		}
+	};
+
+	const changePwmOff = (e: Event) => {
+		const target = e.target as HTMLTextAreaElement;
+		let value = Number(target?.value);
+		console.log('Changed pwm off to ' + value);
+		if (!import.meta.env.DEV) {
+			ws.send('setPWMOff: ' + pad(value, 3));
+		} else {
+			pwmOffDelay = (value / speedFactor) * 1000;
+		}
+	};
+
 	const changeMode = (e: Event) => {
 		const target = e.target as HTMLTextAreaElement;
 		let value = target?.value;
@@ -452,7 +467,7 @@
 					class="onoffswitch-checkbox h-0"
 					id="relais_switch_input"
 					tabindex="0"
-					checked={relais}
+					checked={relais === 1}
 				/>
 				<label class="onoffswitch-label" for="relais_switch_input">
 					<span class="onoffswitch-inner"></span>
@@ -501,11 +516,41 @@
 					<option value="off" selected>Manual</option>
 				</select>
 			</p>
+			{#if mode === 'pwm'}
+				<div class="gap-15 mt-2 flex items-center">
+					<div>on</div>
+					<div>off</div>
+				</div>
+
+				<div class="mt-2 flex items-center gap-1">
+					<input
+						class="min-w-[65px] rounded"
+						type="number"
+						min="0"
+						max="120"
+						placeholder="4"
+						id="pwm_on"
+						onchange={changePwmOn}
+					/>
+					<label for="pwm_on"> s </label>
+					<input
+						class="min-w-[65px] rounded"
+						type="number"
+						min="0"
+						max="120"
+						placeholder="7"
+						id="pwm_off"
+						onchange={changePwmOff}
+					/>
+					<label for="pwm_off"> s </label>
+				</div>
+			{/if}
 		</div>
 		<div class="card flex cursor-pointer gap-2">
 			<button
 				class="cursor-pointer rounded border p-2"
-				onclick={() => (pauseGraphUpdate = !pauseGraphUpdate)}>Pause Graph</button
+				onclick={() => (pauseGraphUpdate = !pauseGraphUpdate)}
+				>{pauseGraphUpdate ? 'Resume' : 'Pause'} Graph</button
 			>
 			<button
 				class="cursor-pointer rounded border p-2"

@@ -35,7 +35,8 @@ float derivedOverShoot = targetTemp;
 float derivedUnderShoot = targetTemp;
 unsigned long lastSwitch = 0;
 unsigned long autoSwitchDelay = 20000; // 20s
-unsigned long pwmSwitchDelay = 5000;   // 5s
+float pwmSwitchDelayOn = 4000;         // 5s
+float pwmSwitchDelayOff = 7000;        // 5s
 
 String mode = "off";
 
@@ -119,6 +120,7 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
       {
         digitalWrite(relay, LOW);
         lastSwitch = millis();
+        mode = "off";
       }
       else
       {
@@ -153,6 +155,23 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
       }
       Serial.printf("\nMode set to ");
       Serial.print(mode);
+    }
+    if (message.startsWith("setPWMOn"))
+    {
+      String target = message.substring(10, 15);
+      pwmSwitchDelayOn = target.toFloat();
+      Serial.printf("\nPWM switch ON set to ");
+      Serial.print(pwmSwitchDelayOn);
+      Serial.printf("°C");
+    }
+
+    if (message.startsWith("setPWMOff"))
+    {
+      String target = message.substring(11, 16);
+      pwmSwitchDelayOff = target.toFloat();
+      Serial.printf("\nPWM switch OFF set to ");
+      Serial.print(pwmSwitchDelayOff);
+      Serial.printf("°C");
     }
   }
 }
@@ -228,14 +247,18 @@ void regulateRelais()
 
   if (mode == "pwm")
   {
-    if ((millis() - lastSwitch) > pwmSwitchDelay)
+    if ((millis() - lastSwitch) > pwmSwitchDelayOn)
     {
       if (digitalRead(relay) == HIGH)
       {
         digitalWrite(relay, LOW);
         lastSwitch = millis();
       }
-      else if (digitalRead(relay) == LOW)
+    }
+
+    if ((millis() - lastSwitch) > pwmSwitchDelayOff)
+    {
+      if (digitalRead(relay) == LOW)
       {
         digitalWrite(relay, HIGH);
         lastSwitch = millis();
